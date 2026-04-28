@@ -7,7 +7,8 @@ Admin dashboard สำหรับจัดการ Kong Gateway — สร้�
 - [โครงสร้างโปรเจกต์](#โครงสร้างโปรเจกต์)
 - [การติดตั้งและรัน](#การติดตั้งและรัน)
 - [การใช้งาน Dashboard](#การใช้งาน-dashboard)
-- [Verify Token ด้วย Keycloak](#verify-token-ด้วย-keycloak)
+- [Token Auth & Authorization (UI)](#token-auth--authorization-ui)
+- [Verify Token ด้วย Keycloak (curl)](#verify-token-ด้วย-keycloak-curl)
 - [Authorization ตาม Role/Scope](#authorization-ตาม-rolescope)
 
 ---
@@ -33,7 +34,8 @@ kong-gateway/
 │       ├── ServicesView.vue
 │       ├── RoutesView.vue
 │       ├── UpstreamsView.vue
-│       └── PluginsView.vue
+│       ├── PluginsView.vue
+│       └── TokenAuthView.vue  # JWT credentials, ACL groups, Protect wizard
 ├── package.json
 └── vite.config.ts           # build outDir = ./dashboard
 ```
@@ -92,17 +94,120 @@ npm run build
 
 ## การใช้งาน Dashboard
 
-| หน้า       | ความสามารถ                                             |
-|------------|-------------------------------------------------------|
-| Dashboard  | แสดง Kong node info, stats, server connections        |
-| Services   | CRUD services (host, port, protocol, timeout)         |
-| Routes     | CRUD routes + เลือก service, methods, paths, protocols |
-| Upstreams  | CRUD upstreams + จัดการ targets (host:port, weight)   |
-| Plugins    | CRUD plugins + enable/disable toggle                  |
+| หน้า        | ความสามารถ                                             |
+|-------------|-------------------------------------------------------|
+| Dashboard   | แสดง Kong node info, stats, server connections        |
+| Services    | CRUD services (host, port, protocol, timeout)         |
+| Routes      | CRUD routes + เลือก service, methods, paths, protocols |
+| Upstreams   | CRUD upstreams + จัดการ targets (host:port, weight)   |
+| Plugins     | CRUD plugins + enable/disable toggle                  |
+| Token Auth  | จัดการ Consumers, JWT Credentials, ACL Groups + Protect wizard |
 
 ---
 
-## Verify Token ด้วย Keycloak
+## Token Auth & Authorization (UI)
+
+หน้า **Token Auth** (`/#/token-auth`) รวมทุกอย่างที่ต้องใช้สำหรับ JWT verification และ ACL authorization ไว้ใน 4 tab
+
+### Tab 1 — 👤 Consumers
+
+จัดการ Kong Consumers (ตัวแทนของ user/application ที่เรียก API)
+
+- เพิ่ม / แก้ไข / ลบ consumer (`username` หรือ `custom_id`)
+- ปุ่ม **🔑 JWT** — กดเพื่อข้ามไป Tab JWT Credentials ของ consumer นั้นทันที
+- ปุ่ม **🛡️ ACL** — กดเพื่อข้ามไป Tab ACL Groups ของ consumer นั้นทันที
+
+### Tab 2 — 🔑 JWT Credentials
+
+ผูก JWT credential กับ consumer เพื่อให้ Kong สามารถ verify token ได้
+
+| Field | คำอธิบาย |
+|-------|----------|
+| **Key** (iss) | ต้องตรงกับ `iss` claim ใน JWT Token — กด ⟳ UUID เพื่อ generate อัตโนมัติ |
+| **Algorithm** | HS256 / HS384 / HS512 (HMAC) หรือ RS256 / ES256 (asymmetric) |
+| **Secret** | HMAC signing secret — กด ⟳ Gen เพื่อ generate random secret |
+
+- แสดง / ซ่อน secret ด้วยปุ่ม 👁️
+- Copy key หรือ secret ด้วยปุ่ม ⎘
+- หลังสร้าง credential จะแสดง panel สรุปข้อมูลทันที (ควร copy ก่อนปิด)
+
+### Tab 3 — 🛡️ ACL Groups
+
+กำหนด group membership ให้ consumer เพื่อใช้กับ ACL plugin
+
+```
+consumer "alice"  →  groups: ["admin", "editor"]
+consumer "bob"    →  groups: ["viewer"]
+```
+
+- เลือก consumer → ดู group ที่อยู่ทั้งหมด
+- เพิ่ม / ลบ group (group name ต้องตรงกับที่ใช้ใน ACL plugin)
+
+### Tab 4 — 🔒 Protect Resource
+
+Wizard สำหรับติด `jwt` plugin และ `acl` plugin ให้ service หรือ route โดยไม่ต้องใช้ curl
+
+**เลือก Target:**
+
+| ประเภท | ผลลัพธ์ |
+|--------|---------|
+| 🌐 Global | ใช้กับทุก request ผ่าน Kong |
+| 📦 Service | ใช้กับ service ที่เลือก ทุก route ของ service นั้น |
+| 🛤️ Route | ใช้กับ route เดียวที่เลือก |
+
+**JWT Plugin config:**
+
+| ตัวเลือก | ค่าเริ่มต้น | คำอธิบาย |
+|----------|------------|---------|
+| Key Claim Name | `iss` | ชื่อ claim ที่ใช้ lookup consumer credential |
+| Header Names | `authorization` | HTTP header ที่ส่ง token มา |
+| URI Param Names | `jwt` | Query param สำรอง (เช่น `?jwt=...`) |
+| Verify `exp` | ✅ | บังคับตรวจ expiry |
+| Verify `nbf` | ☐ | บังคับตรวจ not-before |
+| Max Expiration | `0` | จำกัด token lifetime (วินาที, 0 = ไม่จำกัด) |
+
+**ACL Plugin config:**
+
+| ตัวเลือก | คำอธิบาย |
+|----------|---------|
+| Allow groups | เฉพาะ consumer ใน group เหล่านี้เท่านั้นที่ผ่านได้ |
+| Deny groups | consumer ใน group เหล่านี้ถูกปฏิเสธเสมอ |
+
+> ⚠️ `jwt` plugin ต้องติดก่อน `acl` plugin จึงจะทำงานร่วมกันได้ (JWT plugin เป็นคนตั้ง consumer context ให้ ACL plugin ใช้)
+
+**Applied Plugins panel:** แสดง plugin ที่ติดอยู่บน target ปัจจุบัน พร้อมปุ่มลบแต่ละตัว
+
+### Request Flow
+
+```
+Client
+  │  Authorization: Bearer <JWT>
+  ▼
+Kong Gateway
+  │
+  ├─[jwt plugin]─────────────────────────────────────────┐
+  │   1. ดึง token จาก header/query param               │
+  │   2. decode header → หา key_claim (iss)             │
+  │   3. lookup JWT credential ใน Kong DB               │
+  │   4. verify signature (HMAC secret / RSA public key) │
+  │   5. verify exp / nbf (ถ้าตั้งไว้)                  │
+  │   6. ตั้ง consumer context                          │
+  │                                                      │
+  ├─[acl plugin]─────────────────────────────────────────┘
+  │   7. อ่าน consumer groups จาก context
+  │   8. เทียบกับ allow/deny list
+  │   allow → forward request
+  │   deny  → 403 Forbidden
+  │
+  ▼
+Upstream Service
+```
+
+---
+
+## Verify Token ด้วย Keycloak (curl)
+
+> ทำผ่าน UI ได้ที่หน้า **Token Auth** — ส่วนนี้เป็น reference สำหรับ curl / automation
 
 ใช้ **`jwt` plugin** ของ Kong (รองรับ Kong OSS) ร่วมกับ Keycloak สำหรับ verify Bearer token ทุก request
 

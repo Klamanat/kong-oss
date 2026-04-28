@@ -8,19 +8,21 @@ import ServicesView from './views/ServicesView.vue'
 import RoutesView from './views/RoutesView.vue'
 import UpstreamsView from './views/UpstreamsView.vue'
 import PluginsView from './views/PluginsView.vue'
+import TokenAuthView from './views/TokenAuthView.vue'
 
 loadAuth()
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/login',     component: LoginView, meta: { public: true } },
-    { path: '/',          redirect: '/dashboard' },
-    { path: '/dashboard', component: DashboardView },
-    { path: '/services',  component: ServicesView },
-    { path: '/routes',    component: RoutesView },
-    { path: '/upstreams', component: UpstreamsView },
-    { path: '/plugins',   component: PluginsView },
+    { path: '/login',      component: LoginView,    meta: { public: true } },
+    { path: '/',           redirect: '/dashboard' },
+    { path: '/dashboard',  component: DashboardView },
+    { path: '/services',   component: ServicesView },
+    { path: '/routes',     component: RoutesView },
+    { path: '/upstreams',  component: UpstreamsView },
+    { path: '/plugins',    component: PluginsView },
+    { path: '/token-auth', component: TokenAuthView },
   ],
 })
 

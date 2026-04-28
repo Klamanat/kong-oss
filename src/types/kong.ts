@@ -67,6 +67,32 @@ export interface Plugin {
   created_at: number
 }
 
+export interface Consumer {
+  id: string
+  username?: string
+  custom_id?: string
+  tags?: string[]
+  created_at: number
+}
+
+export interface JwtCredential {
+  id: string
+  consumer: { id: string }
+  key: string
+  algorithm: string
+  secret?: string
+  rsa_public_key?: string
+  created_at: number
+}
+
+export interface AclEntry {
+  id: string
+  consumer: { id: string }
+  group: string
+  tags?: string[]
+  created_at: number
+}
+
 export interface KongInfo {
   version: string
   hostname: string
